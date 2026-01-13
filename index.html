@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dopamine Calculator - Mobile Optimized</title>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f4f7f6; padding: 15px; display: flex; justify-content: center; }
+        .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 500px; border: 2px solid #2c3e50; }
+        h2 { text-align: center; color: #2c3e50; font-size: 1.2rem; margin-top: 0; }
+        .input-group { margin-bottom: 10px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; }
+        select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 1rem; }
+        .calc-box { border: 1px dashed #e67e22; padding: 15px; margin-top: 20px; border-radius: 8px; background-color: #fffaf0; }
+        h3 { font-size: 1rem; color: #d35400; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 15px; }
+        
+        /* ปรับปรุงตารางแนวตั้งและการเน้นสีส่วนหัว */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        th, td { border: 1px solid #bdc3c7; padding: 10px; text-align: left; }
+        
+        /* ส่วนหัวข้อหลัก (Hilight สีเหลือง/ทอง) */
+        .highlight-header { 
+            background-color: #ffd700 !important; /* สีทอง/เหลืองเข้ม */
+            color: #000 !important;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        th { background: #ecf0f1; color: #2c3e50; width: 40%; font-weight: bold; }
+        td { background: #fff; }
+
+        .res-val { font-weight: bold; color: #27ae60; font-size: 1.1rem; }
+        .status-ok { color: #27ae60; font-weight: bold; }
+        .status-warn { color: #e74c3c; font-weight: bold; }
+        .home-btn { display: block; width: 100%; padding: 12px; background: #34495e; color: white; border: none; border-radius: 5px; margin-top: 20px; cursor: pointer; }
+        .summary-item { margin-bottom: 10px; padding: 5px; border-bottom: 1px solid #eee; }
+        
+        .indication-text { font-weight: bold; color: #000; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>โปรแกรมคำนวณขนาดยา Dopamine inj.<br>สำหรับผู้ป่วยเด็ก และทารกแรกเกิด</h2>
+
+    <div class="input-group">
+        <label>กรุณาเลือกกลุ่มผู้ป่วย</label>
+        <select id="patientGroup" onchange="runCalc()">
+            <option value="pediatric">1. ผู้ป่วยเด็ก (Pediatric)</option>
+            <option value="neonatal">2. ทารกแรกเกิด (Neonatal)</option>
+        </select>
+    </div>
+
+    <div class="input-group">
+        <label>น้ำหนักตัวผู้ป่วย (kg)</label>
+        <input type="number" id="weight" step="0.1" placeholder="ระบุน้ำหนัก" oninput="runCalc()">
+    </div>
+
+    <div class="input-group">
+        <label>ปริมาณยาที่แพทย์สั่งใช้ (mg)</label>
+        <input type="number" id="doseMg" placeholder="ระบุ mg" oninput="runCalc()">
+    </div>
+
+    <div class="input-group">
+        <label>ผสมในสารละลายจำนวน (ml)</label>
+        <input type="number" id="fluidMl" placeholder="ระบุ ml สารละลาย" oninput="runCalc()">
+    </div>
+
+    <div class="input-group">
+        <label>Rate (ml/hr)</label>
+        <input type="number" id="rate" placeholder="ระบุ ml/hr" oninput="runCalc()">
+    </div>
+
+    <div class="calc-box">
+        <h3>1. คำนวณปริมาณยาที่ต้องดูด (จาก mg เป็น ml) ของยา Dopamine (250 mg/ 10 ml)</h3>
+        <p>ปริมาณยาที่ต้องเตรียม: <span id="drawMl" class="res-val">0.00</span> ml</p>
+
+        <h3>2. คำนวณความเหมาะสมของขนาดยา Dopamine inj.</h3>
+        <div id="doseTablesContainer"></div>
+
+        <h3>3. ประเมินความเข้มข้นของยาที่ได้รับ (Concentration)</h3>
+        <div class="summary-item">
+            <label>ความเข้มข้นในหน่วย mg/ml:</label>
+            <span id="currentConcMg" class="res-val">0.00</span> mg/ml
+        </div>
+        <div class="summary-item">
+            <label>ผลการประเมินความเข้มข้น:</label>
+            <span id="concStatus">--</span>
+        </div>
+    </div>
+
+    <button class="home-btn" onclick="location.reload()">หน้าหลัก</button>
+</div>
+
+<script>
+function runCalc() {
+    const group = document.getElementById('patientGroup').value;
+    const w = parseFloat(document.getElementById('weight').value) || 0;
+    const mg = parseFloat(document.getElementById('doseMg').value) || 0;
+    const fluid = parseFloat(document.getElementById('fluidMl').value) || 0;
+    const rate = parseFloat(document.getElementById('rate').value) || 0;
+
+    const draw = (mg * 10) / 250;
+    document.getElementById('drawMl').innerText = draw.toFixed(2);
+
+    const actualMcgMin = fluid > 0 ? (rate * mg * 1000) / (fluid * 60) : 0;
+    const actualMcgKgMin = w > 0 ? (actualMcgMin / w) : 0;
+
+    const concMgMl = fluid > 0 ? mg / fluid : 0;
+    document.getElementById('currentConcMg').innerText = concMgMl.toFixed(2);
+
+    const container = document.getElementById('doseTablesContainer');
+    container.innerHTML = "";
+
+    const checkSuitability = (min, max, actual) => {
+        if (actual <= 0) return "--";
+        if (max === Infinity) return actual >= min ? "<span class='status-ok'>เหมาะสม</span>" : "<span class='status-warn'>ไม่เหมาะสม</span>";
+        return (actual >= min && actual <= max) ? "<span class='status-ok'>เหมาะสม</span>" : "<span class='status-warn'>ไม่เหมาะสม</span>";
+    };
+
+    let recs = [];
+    if (group === 'pediatric') {
+        recs = [
+            { label: "Resuscitation (2-20 mcg/kg/min)", min: 2 * w, max: 20 * w },
+            { label: "Cold shock (5-9 mcg/kg/min)", min: 5 * w, max: 9 * w },
+            { label: "Warm shock (≥ 10 mcg/kg/min)", min: 10 * w, max: Infinity }
+        ];
+    } else {
+        recs = [
+            { label: "Severe sepsis and septic shock (2-20 mcg/kg/min)", min: 2 * w, max: 20 * w }
+        ];
+    }
+
+    recs.forEach(r => {
+        const rangeText = r.max === Infinity ? "≥ " + r.min.toFixed(1) : r.min.toFixed(1) + " - " + r.max.toFixed(1);
+        const suitability = checkSuitability(r.min, r.max, actualMcgMin);
+        
+        // ปรับแต่งตารางให้มีส่วนหัวสีโดดเด่นแยกกันชัดเจน
+        const tableHtml = `
+            <table>
+                <tr>
+                    <th colspan="2" class="highlight-header">ข้อบ่งใช้: ${r.label}</th>
+                </tr>
+                <tr>
+                    <th>แนะนำ (mcg/min)</th>
+                    <td>${rangeText}</td>
+                </tr>
+                <tr>
+                    <th>ได้รับจริง (mcg/min)</th>
+                    <td>${actualMcgMin.toFixed(2)} (${actualMcgKgMin.toFixed(2)} mcg/kg/min)</td>
+                </tr>
+                <tr>
+                    <th>การประเมิน</th>
+                    <td>${suitability}</td>
+                </tr>
+            </table>
+        `;
+        container.innerHTML += tableHtml;
+    });
+
+    const maxLimit = (group === 'pediatric') ? 12.5 : 3.2;
+    const concStatus = document.getElementById('concStatus');
+    
+    if (concMgMl <= 0) {
+        concStatus.innerText = "--";
+    } else if (concMgMl <= maxLimit) {
+        concStatus.innerHTML = `<span class='status-ok'>เหมาะสม (ความเข้มข้นไม่เกิน ${maxLimit} mg/ml)</span>`;
+    } else {
+        concStatus.innerHTML = `<span class='status-warn'>ไม่เหมาะสม (ความเข้มข้นเกินเกณฑ์ ${maxLimit} mg/ml)</span>`;
+    }
+}
+</script>
+
+</body>
+</html>
